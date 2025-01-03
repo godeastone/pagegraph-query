@@ -1,89 +1,67 @@
-from __future__ import annotations
-
-from abc import ABC
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Union, Sequence
+from typing import Any, cast, Union
 
-from pagegraph.types import BlinkId, PageGraphId, RequestHeaders
-
-if TYPE_CHECKING:
-    from typing import Any, Optional
-
-    from pagegraph.graph import PageGraph
-    from pagegraph.types import Url, RequestId
-    from packaging.version import Version
+from pagegraph.types import BlinkId, PageGraphId, Url, RequestId
 
 
 @dataclass
-class ReportBase(ABC):
+class Report:
     pass
 
 
-@dataclass
-class BasicReport(ReportBase):
-    name: str
-
-
-JSONAble = (
-    ReportBase | Sequence[ReportBase] | dict[str, ReportBase] | str | int |
-    float | bool | None)
+JSONAble = Report | list[Report] | dict[str, Report] | str | int | float | bool
 
 
 @dataclass
-class FrameReport(ReportBase):
+class FrameReport(Report):
     id: PageGraphId
-    main_frame: bool
     url: Url | None
-    security_origin: Url | None
     blink_id: BlinkId
 
 
 @dataclass
-class DOMElementReport(ReportBase):
+class DOMElementReport(Report):
     id: PageGraphId
     tag: str
     attrs: dict[str, JSONAble] | None = None
 
 
 @dataclass
-class JSStructureReport(ReportBase):
+class JSStructureReport(Report):
     name: str
     type: str
 
 
 @dataclass
-class JSCallResultReport(ReportBase):
-    method: str
+class JSInvokeReport(Report):
     args: Any
     result: Any
-    call_context: FrameReport
-    execution_context: Optional[FrameReport] = None
 
 
 @dataclass
-class RequestReport(ReportBase):
+class RequestReport(Report):
     id: PageGraphId
     url: Url | None
 
 
 @dataclass
-class RequestCompleteReport(ReportBase):
+class RequestCompleteReport(Report):
     id: PageGraphId
     size: int
     hash: str
-    headers: RequestHeaders
+    headers: str
     status: str = "complete"
 
 
 @dataclass
-class RequestErrorReport(ReportBase):
+class RequestErrorReport(Report):
     id: PageGraphId
-    headers: RequestHeaders | None
+    headers: str | None
     status: str = "error"
 
 
 @dataclass
-class RequestChainReport(ReportBase):
+class RequestChainReport(Report):
     request_id: RequestId
     request_type: str
     request: RequestReport
@@ -92,23 +70,21 @@ class RequestChainReport(ReportBase):
 
 
 @dataclass
-class ScriptReport(ReportBase):
+class ScriptReport(Report):
     id: PageGraphId
     type: str
     hash: str
     url: Url | None = None
     source: str | None = None
-    executor: Union[DOMElementReport, ScriptReport, None] = None
+    executor: Union[DOMElementReport, "ScriptReport", None] = None
 
 
 @dataclass
-class ElementReport(ReportBase):
+class ElementReport(Report):
     id: PageGraphId
     type: str
-    details: Union[dict[str, JSONAble], None]
+    details: Union[dict[str, str], None]
 
-
-DOMNodeReport = Union[DOMElementReport, FrameReport]
 
 BriefNodeReport = ElementReport
 BriefEdgeReport = ElementReport
@@ -116,21 +92,20 @@ BriefEdgeReport = ElementReport
 
 @dataclass
 class NodeReport(ElementReport):
-    incoming_edges: list[Union[BriefEdgeReport, EdgeReport, str]]
-    outgoing_edges: list[Union[BriefEdgeReport, EdgeReport, str]]
+    incoming_edges: list[Union["BriefEdgeReport", "EdgeReport", str]]
+    outgoing_edges: list[Union["BriefEdgeReport", "EdgeReport", str]]
     kind: str = "node"
 
 
 @dataclass
 class EdgeReport(ElementReport):
-    incoming_node: Union[NodeReport, BriefNodeReport, str, None]
-    outgoing_node: Union[NodeReport, BriefNodeReport, str, None]
+    incoming_node: Union["NodeReport", "BriefNodeReport", str, None]
+    outgoing_node: Union["NodeReport", "BriefNodeReport", str, None]
     kind: str = "edge"
 
 
-@dataclass
-class Reportable(ABC):
-    def to_report(self) -> ReportBase:
+class Reportable:
+    def to_report(self) -> Report:
         raise NotImplementedError()
 
 
@@ -151,7 +126,7 @@ def to_jsonable(data: JSONAble) -> Any:
             jsonable_dict[report_key] = to_jsonable(v)
         return jsonable_dict
 
-    if isinstance(data, ReportBase):
+    if isinstance(data, Report):
         jsonable_map = {}
         for field in fields(data):
             field_name = field.name
